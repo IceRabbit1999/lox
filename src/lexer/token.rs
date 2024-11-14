@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::bail;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -58,6 +58,10 @@ impl TokenType {
             '\n' => Ok(TokenType::NewLine),
             _ => bail!("Invalid token: {}", s),
         }
+    }
+    
+    pub fn is_skippable(&self) -> bool {
+        matches!(self, TokenType::Space | TokenType::Tab | TokenType::NewLine)
     }
 }
 
@@ -116,7 +120,7 @@ impl Display for Number {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum KeyWord {
     And,
     Class,

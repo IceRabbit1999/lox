@@ -2,10 +2,10 @@ use std::str::FromStr;
 
 use anyhow::{bail, Context};
 
-use crate::scanning::token::{KeyWord, Number, TokenType};
-mod token;
+use crate::lexer::token::{KeyWord, Number, TokenType};
+pub mod token;
 
-pub fn scanning(path: &str) -> anyhow::Result<Vec<TokenType>> {
+pub fn lexing(path: &str) -> anyhow::Result<Vec<TokenType>> {
     let content = std::fs::read_to_string(path)?;
     let mut iter = content.chars().peekable();
 
@@ -70,16 +70,18 @@ pub fn scanning(path: &str) -> anyhow::Result<Vec<TokenType>> {
             '"' => {
                 iter.next();
                 let mut string_literal = String::new();
+                let mut valid = false;
                 while let Some(&c) = iter.peek() {
                     if c == '"' {
                         iter.next(); // Consume the closing quote
                         vec.push(TokenType::String(string_literal));
+                        valid = true;
                         break;
                     }
                     string_literal.push(c);
                     iter.next();
                 }
-                if iter.peek().is_none() {
+                if iter.peek().is_none() && !valid {
                     bail!("UnterminatedString");
                 }
             }
@@ -148,8 +150,8 @@ pub fn scanning(path: &str) -> anyhow::Result<Vec<TokenType>> {
 mod tests {
     #[test]
     fn test_scanning() {
-        let path = "tests/test.lox";
-        let tokens = super::scanning(path).unwrap();
+        let path = "tests/scan.lox";
+        let tokens = super::lexing(path).unwrap();
         println!("{:?}", tokens);
     }
 }
