@@ -1,4 +1,5 @@
 use std::fmt::{Display, Formatter};
+
 use crate::lexer::token::Number;
 
 // expression     → equality ;
@@ -15,7 +16,7 @@ pub enum AstNode {
     Binary {
         left: Box<AstNode>,
         operator: char,
-        right: Box<AstNode>
+        right: Box<AstNode>,
     },
     Boolean(bool),
     Group(Box<AstNode>),
@@ -24,18 +25,17 @@ pub enum AstNode {
     String(String),
     Unary {
         operator: char,
-        operand: Box<AstNode>
-    }
+        operand: Box<AstNode>,
+    },
 }
 
 impl Display for AstNode {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+    fn fmt(
+        &self,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result {
         match self {
-            AstNode::Binary {
-                left,
-                operator,
-                right,
-            } => write!(f, "({} {} {})", operator, left, right),
+            AstNode::Binary { left, operator, right } => write!(f, "({} {} {})", operator, left, right),
             AstNode::Boolean(v) => write!(f, "{}", v),
             AstNode::Group(v) => write!(f, "(group {})", v),
             AstNode::Nil => write!(f, "nil"),
@@ -50,8 +50,7 @@ impl Display for AstNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::lexer::token::Number;
-    use crate::parsing::ast::AstNode;
+    use crate::{lexer::token::Number, parsing::ast::AstNode};
 
     #[test]
     fn display() {
