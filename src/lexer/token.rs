@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::bail;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenType {
     LeftParen,
     RightParen,
@@ -35,6 +35,43 @@ pub enum TokenType {
     KeyWord(KeyWord),
 }
 
+impl PartialEq for TokenType {
+    fn eq(
+        &self,
+        other: &Self,
+    ) -> bool {
+        match (self, other) {
+            (TokenType::LeftParen, TokenType::LeftParen)
+            | (TokenType::RightParen, TokenType::RightParen)
+            | (TokenType::LeftBrace, TokenType::LeftBrace)
+            | (TokenType::RightBrace, TokenType::RightBrace)
+            | (TokenType::Comma, TokenType::Comma)
+            | (TokenType::Dot, TokenType::Dot)
+            | (TokenType::Minus, TokenType::Minus)
+            | (TokenType::Plus, TokenType::Plus)
+            | (TokenType::Semicolon, TokenType::Semicolon)
+            | (TokenType::Star, TokenType::Star)
+            | (TokenType::Bang, TokenType::Bang)
+            | (TokenType::BangEqual, TokenType::BangEqual)
+            | (TokenType::Equal, TokenType::Equal)
+            | (TokenType::EqualEqual, TokenType::EqualEqual)
+            | (TokenType::Greater, TokenType::Greater)
+            | (TokenType::GreaterEqual, TokenType::GreaterEqual)
+            | (TokenType::Less, TokenType::Less)
+            | (TokenType::LessEqual, TokenType::LessEqual)
+            | (TokenType::Slash, TokenType::Slash)
+            | (TokenType::Space, TokenType::Space)
+            | (TokenType::Tab, TokenType::Tab)
+            | (TokenType::NewLine, TokenType::NewLine) => true,
+            (TokenType::String(s1), TokenType::String(s2)) => s1 == s2,
+            (TokenType::Number(n1), TokenType::Number(n2)) => n1 == n2,
+            (TokenType::Identifier(s1), TokenType::Identifier(s2)) => s1 == s2,
+            (TokenType::KeyWord(k1), TokenType::KeyWord(k2)) => k1 == k2,
+            _ => false,
+        }
+    }
+}
+
 impl TokenType {
     pub fn from_char(s: char) -> anyhow::Result<Self> {
         match s {
@@ -58,6 +95,10 @@ impl TokenType {
             '\n' => Ok(TokenType::NewLine),
             _ => bail!("Invalid token: {}", s),
         }
+    }
+
+    pub fn is_skippable(&self) -> bool {
+        matches!(self, TokenType::Space | TokenType::Tab | TokenType::NewLine)
     }
 }
 
@@ -116,7 +157,20 @@ impl Display for Number {
     }
 }
 
-#[derive(Debug)]
+impl PartialEq for Number {
+    fn eq(
+        &self,
+        other: &Self,
+    ) -> bool {
+        match (self, other) {
+            (Number::Integer(i1), Number::Integer(i2)) => i1 == i2,
+            (Number::Float(f1), Number::Float(f2)) => f1 == f2,
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum KeyWord {
     And,
     Class,
