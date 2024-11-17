@@ -2,7 +2,7 @@ use std::{
     fmt::{Debug, Display, Formatter},
     str::FromStr,
 };
-
+use std::ops::{Add, Div, Mul, Neg, Sub};
 use anyhow::bail;
 
 #[derive(Debug, Clone)]
@@ -145,6 +145,65 @@ pub enum Number {
     Float(f64),
 }
 
+impl Add for Number {
+    type Output = Number;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 + i2),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 + f2),
+            _ => panic!("Cannot add integer and float"),
+        }
+    }
+}
+
+impl Sub for Number {
+    type Output = Number;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 - i2),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 - f2),
+            _ => panic!("Cannot subtract integer and float"),
+        }
+    }
+}
+
+impl Mul for Number {
+    type Output = Number;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 * i2),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 * f2),
+            _ => panic!("Cannot multiply integer and float"),
+        }
+    }
+}
+
+impl Div for Number {
+    type Output = Number;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self, rhs) {
+            (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 / i2),
+            (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 / f2),
+            _ => panic!("Cannot divide integer and float"),
+        }
+    }
+}
+
+impl Neg for Number {
+    type Output = Number;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Number::Integer(i) => Number::Integer(-i),
+            Number::Float(f) => Number::Float(-f),
+        }
+    }
+}
+
 impl Display for Number {
     fn fmt(
         &self,
@@ -240,5 +299,20 @@ impl Display for KeyWord {
             KeyWord::While => "while".to_owned(),
         };
         write!(f, "{}", string)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn number() {
+        let n1 = super::Number::Integer(1);
+        let n2 = super::Number::Integer(2);
+        let f1 = super::Number::Float(1.1);
+        let f2 = super::Number::Float(2.2);
+        let res1 = n1 + n2;
+        let res2 = f1 + f2;
+        println!("{}", res1);
+        println!("{}", res2);
     }
 }
