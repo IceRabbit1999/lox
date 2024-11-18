@@ -15,7 +15,7 @@ use crate::lexer::token::Number;
 pub enum AstNode {
     Binary {
         left: Box<AstNode>,
-        operator: char,
+        operator: String,
         right: Box<AstNode>,
     },
     Boolean(bool),
@@ -58,10 +58,10 @@ mod tests {
         let ast = AstNode::Binary {
             left: Box::new(AstNode::Binary {
                 left: Box::new(AstNode::Number(Number::Float(42.42))),
-                operator: '+',
+                operator: "+".to_string(),
                 right: Box::new(AstNode::Number(Number::Integer(80))),
             }),
-            operator: '-',
+            operator: "-".to_string(),
             right: Box::new(AstNode::Number(Number::Integer(94))),
         };
 

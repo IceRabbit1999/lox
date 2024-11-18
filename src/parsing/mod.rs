@@ -45,7 +45,7 @@ impl Parser {
                 let right = self.comparison()?;
                 node = AstNode::Binary {
                     left: Box::new(node),
-                    operator: operator.parse()?,
+                    operator,
                     right: Box::new(right),
                 };
             } else {
@@ -68,7 +68,7 @@ impl Parser {
                 let right = self.term()?;
                 node = AstNode::Binary {
                     left: Box::new(node),
-                    operator: operator.parse()?,
+                    operator,
                     right: Box::new(right),
                 };
             } else {
@@ -91,7 +91,7 @@ impl Parser {
                 let right = self.factor()?;
                 node = AstNode::Binary {
                     left: Box::new(node),
-                    operator: operator.parse()?,
+                    operator,
                     right: Box::new(right),
                 };
             } else {
@@ -115,7 +115,7 @@ impl Parser {
                 let right = self.unary()?;
                 left = AstNode::Binary {
                     left: Box::new(left),
-                    operator: operator.parse()?,
+                    operator,
                     right: Box::new(right),
                 };
             } else {
