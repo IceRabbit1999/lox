@@ -1,8 +1,10 @@
 use std::{
+    cmp::Ordering,
     fmt::{Debug, Display, Formatter},
+    ops::{Add, Div, Mul, Neg, Sub},
     str::FromStr,
 };
-use std::ops::{Add, Div, Mul, Neg, Sub};
+
 use anyhow::bail;
 
 #[derive(Debug, Clone)]
@@ -148,7 +150,10 @@ pub enum Number {
 impl Add for Number {
     type Output = Number;
 
-    fn add(self, rhs: Self) -> Self::Output {
+    fn add(
+        self,
+        rhs: Self,
+    ) -> Self::Output {
         match (self, rhs) {
             (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 + i2),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 + f2),
@@ -160,7 +165,10 @@ impl Add for Number {
 impl Sub for Number {
     type Output = Number;
 
-    fn sub(self, rhs: Self) -> Self::Output {
+    fn sub(
+        self,
+        rhs: Self,
+    ) -> Self::Output {
         match (self, rhs) {
             (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 - i2),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 - f2),
@@ -172,7 +180,10 @@ impl Sub for Number {
 impl Mul for Number {
     type Output = Number;
 
-    fn mul(self, rhs: Self) -> Self::Output {
+    fn mul(
+        self,
+        rhs: Self,
+    ) -> Self::Output {
         match (self, rhs) {
             (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 * i2),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 * f2),
@@ -184,7 +195,10 @@ impl Mul for Number {
 impl Div for Number {
     type Output = Number;
 
-    fn div(self, rhs: Self) -> Self::Output {
+    fn div(
+        self,
+        rhs: Self,
+    ) -> Self::Output {
         match (self, rhs) {
             (Number::Integer(i1), Number::Integer(i2)) => Number::Integer(i1 / i2),
             (Number::Float(f1), Number::Float(f2)) => Number::Float(f1 / f2),
@@ -200,6 +214,19 @@ impl Neg for Number {
         match self {
             Number::Integer(i) => Number::Integer(-i),
             Number::Float(f) => Number::Float(-f),
+        }
+    }
+}
+
+impl PartialOrd for Number {
+    fn partial_cmp(
+        &self,
+        other: &Self,
+    ) -> Option<Ordering> {
+        match (self, other) {
+            (Number::Integer(i1), Number::Integer(i2)) => i1.partial_cmp(i2),
+            (Number::Float(f1), Number::Float(f2)) => f1.partial_cmp(f2),
+            _ => panic!("Cannot compare integer and float"),
         }
     }
 }
