@@ -1,5 +1,7 @@
+mod ast;
 mod evaluating;
-mod lexer;
 mod parsing;
+mod lexing;
+mod token;
 
 fn main() {}

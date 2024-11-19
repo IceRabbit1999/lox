@@ -2,8 +2,8 @@ use std::str::FromStr;
 
 use anyhow::{bail, Context};
 
-use crate::lexer::token::{KeyWord, Number, TokenType};
-pub mod token;
+use crate::token::{Number, TokenType, KeyWord};
+
 
 pub fn lexing(path: &str) -> anyhow::Result<Vec<TokenType>> {
     let content = std::fs::read_to_string(path)?;

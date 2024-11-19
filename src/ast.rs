@@ -1,7 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::token::Number;
-
+use crate::token::Number;
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -50,7 +49,8 @@ impl Display for AstNode {
 
 #[cfg(test)]
 mod tests {
-    use crate::{lexer::token::Number, parsing::ast::AstNode};
+    use crate::ast::AstNode;
+    use crate::token::Number;
 
     #[test]
     fn display() {

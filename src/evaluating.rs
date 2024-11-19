@@ -1,6 +1,7 @@
 use std::ops::Add;
 
-use crate::{lexer::token::Number, parsing::ast::AstNode};
+use crate::{ast::AstNode};
+use crate::token::Number;
 
 impl AstNode {
     pub fn evaluate(&self) -> EvaluateResult {
@@ -77,12 +78,11 @@ pub enum EvaluateResult {
 #[cfg(test)]
 mod tests {
     use crate::{
-        lexer::{
-            lexing,
-            token::{Number, TokenType},
-        },
-        parsing::{ast::AstNode, Parser},
+      
+        parsing::Parser,
     };
+    use crate::lexing::lexing;
+    use crate::token::TokenType;
 
     #[test]
     fn evaluate() {

@@ -1,11 +1,10 @@
-pub mod ast;
-
 use anyhow::bail;
 
 use crate::{
-    lexer::token::{KeyWord, TokenType},
-    parsing::ast::AstNode,
+    ast::AstNode,
 };
+use crate::token::TokenType;
+use crate::token::KeyWord;
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -197,9 +196,10 @@ impl Parser {
 #[cfg(test)]
 mod tests {
     use crate::{
-        lexer::{lexing, token::TokenType},
         parsing::Parser,
     };
+    use crate::lexing::lexing;
+    use crate::token::TokenType;
 
     #[test]
     fn test_parse() {
