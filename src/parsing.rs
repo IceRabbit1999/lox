@@ -2,9 +2,17 @@ use anyhow::bail;
 
 use crate::{
     ast::AstNode,
+    token::{KeyWord, TokenType},
 };
-use crate::token::TokenType;
-use crate::token::KeyWord;
+
+// program        → statement* EOF ;
+//
+// statement      → exprStmt
+//                | printStmt ;
+//
+// exprStmt       → expression ";" ;
+// printStmt      → "print" expression ";" ;
+
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -16,15 +24,129 @@ use crate::token::KeyWord;
 pub struct Parser {
     tokens: Vec<TokenType>,
     current: usize,
+    variables: Vec<AstNode>,
+}
+impl Parser {
+    fn find_var(
+        &self,
+        name: &str,
+    ) -> Option<&AstNode> {
+        self.variables.iter().find(|node| {
+            if let AstNode::Variable { name: n, value: _ } = node {
+                n == name
+            } else {
+                false
+            }
+        })
+    }
+
+    fn add_var(
+        &mut self,
+        var: AstNode,
+    ) -> anyhow::Result<()> {
+        if let AstNode::Variable { name, value } = var {
+            match self.find_var(&name) {
+                Some(_) => {
+                    bail!("Variable {} already declared", name)
+                }
+                None => {
+                    self.variables.push(AstNode::Variable { name, value });
+                }
+            }
+            return Ok(());
+        }
+        bail!("Expected variable")
+    }
 }
 
 impl Parser {
     pub fn new(tokens: Vec<TokenType>) -> Self {
-        Self { tokens, current: 0 }
+        Self {
+            tokens,
+            current: 0,
+            variables: Vec::new(),
+        }
     }
 
-    pub fn parse(&mut self) -> anyhow::Result<AstNode> {
-        self.expression()
+    pub fn parse(&mut self) -> anyhow::Result<Vec<AstNode>> {
+        self.program()
+    }
+
+    fn program(&mut self) -> anyhow::Result<Vec<AstNode>> {
+        let mut vec = Vec::new();
+        while self.current < self.tokens.len() - 1 {
+            let node = self.statement()?;
+            vec.push(node);
+        }
+        Ok(vec)
+    }
+
+    fn statement(&mut self) -> anyhow::Result<AstNode> {
+        let token = self.peek();
+        match token {
+            TokenType::KeyWord(keyword) => match keyword {
+                KeyWord::Print => {
+                    self.forward()?;
+                    let expr = self.expression()?;
+                    if self.peek() != &TokenType::Semicolon {
+                        bail!("Expected ';' after expression")
+                    }
+                    if let Err(_e) = self.forward() {
+                        println!("reach the end of the tokens, last token is {}", self.peek())
+                    }
+                    Ok(AstNode::Print(Box::new(expr)))
+                }
+                KeyWord::Var => {
+                    self.forward()?;
+                    let name = self.peek().clone();
+                    if let TokenType::Identifier(_) = name {
+                        self.forward()?;
+                    } else {
+                        bail!("Expected identifier after var")
+                    }
+                    if self.peek() == &TokenType::Semicolon {
+                        let var = AstNode::Variable {
+                            name: name.to_string(),
+                            value: None,
+                        };
+                        self.add_var(var.clone())?;
+                        if let Err(_e) = self.forward() {
+                            println!("reach the end of the tokens, last token is {}", self.peek())
+                        }
+                        return Ok(var);
+                    }
+                    if self.peek() == &TokenType::Equal {
+                        self.forward()?;
+                    }
+                    let expr = self.expression()?;
+                    if self.peek() != &TokenType::Semicolon {
+                        bail!("Expected ';' after expression")
+                    }
+                    if let Err(_e) = self.forward() {
+                        println!("reach the end of the tokens, last token is {}", self.peek())
+                    }
+                    let var = AstNode::Variable {
+                        name: name.to_string(),
+                        value: Some(Box::new(expr)),
+                    };
+                    self.add_var(var.clone())?;
+                    Ok(var)
+                }
+                _ => {
+                    bail!("Unexpected keyword {:?}", keyword)
+                }
+            },
+            _ => {
+                let expr = self.expression()?;
+                if self.peek() != &TokenType::Semicolon {
+                    bail!("Expected ';' after expression")
+                }
+                if let Err(_e) = self.forward() {
+                    println!("reach the end of the tokens, last token is {}", self.peek())
+                }
+                Ok(expr)
+            }
+        }
     }
 
     fn expression(&mut self) -> anyhow::Result<AstNode> {
@@ -167,7 +289,16 @@ impl Parser {
             TokenType::RightParen => {
                 bail!("Unexpected ')' in parsing primary")
             }
+            TokenType::Identifier(var_name) => {
+                if let Some(var) = self.find_var(&var_name) {
+                    var.clone()
+                } else {
+                    bail!("Variable {} not declared", var_name)
+                }
+            }
             _ => {
+                println!("{:?}", token);
+                println!("{:?}", self.current);
                 bail!("Expected expression in parsing primary")
             }
         };
@@ -195,11 +326,7 @@ impl Parser {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        parsing::Parser,
-    };
-    use crate::lexing::lexing;
-    use crate::token::TokenType;
+    use crate::{lexing::lexing, parsing::Parser, token::TokenType};
 
     #[test]
     fn test_parse() {
@@ -210,7 +337,26 @@ mod tests {
         println!("{:?}", tokens);
 
         let mut parser = Parser::new(tokens);
+        let nodes = parser.parse().unwrap();
+        for node in nodes {
+            println!("{}", node);
+        }
+    }
+
+    #[test]
+    fn statement() {
+        let path = "tests/statement.lox";
+        let tokens = lexing(path).unwrap();
+        let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
+
+        println!("{:?}", tokens);
+
+        let mut parser = Parser::new(tokens);
         let node = parser.parse().unwrap();
-        println!("{}", node);
+        for n in node {
+            println!("{}", n);
+            let result = n.evaluate();
+            println!("{:?}", result);
+        }
     }
 }

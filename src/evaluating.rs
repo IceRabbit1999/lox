@@ -1,7 +1,6 @@
 use std::ops::Add;
 
-use crate::{ast::AstNode};
-use crate::token::Number;
+use crate::{ast::AstNode, token::Number};
 
 impl AstNode {
     pub fn evaluate(&self) -> EvaluateResult {
@@ -13,6 +12,14 @@ impl AstNode {
             Self::Binary { .. } => self.evaluate_binary(),
             Self::Unary { .. } => self.evaluate_unary(),
             Self::Group(node) => node.evaluate(),
+            Self::Print(expr) => expr.evaluate(),
+            Self::Variable { value, .. } => {
+                if let Some(v) = value {
+                    v.evaluate()
+                } else {
+                    EvaluateResult::Nil
+                }
+            }
         }
     }
 
@@ -37,6 +44,7 @@ impl AstNode {
                     },
                     (EvaluateResult::String(left), EvaluateResult::String(right)) => match operator.as_str() {
                         "+" => EvaluateResult::String(left.add(&right)),
+                        "==" => EvaluateResult::Boolean(left == right),
                         _ => panic!("Invalid operator"),
                     },
                     _ => panic!("Invalid operands"),
@@ -77,12 +85,7 @@ pub enum EvaluateResult {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-      
-        parsing::Parser,
-    };
-    use crate::lexing::lexing;
-    use crate::token::TokenType;
+    use crate::{lexing::lexing, parsing::Parser, token::TokenType};
 
     #[test]
     fn evaluate() {
@@ -90,8 +93,10 @@ mod tests {
         let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
         println!("{:?}", tokens);
         let ast = Parser::new(tokens).parse().unwrap();
-        println!("{}", ast);
-        let result = ast.evaluate();
-        println!("{:?}", result);
+        for node in ast {
+            println!("{}", node);
+            let result = node.evaluate();
+            println!("{:?}", result);
+        }
     }
 }

@@ -11,6 +11,7 @@ use crate::token::Number;
 // primary        → NUMBER | STRING | "true" | "false" | "nil"
 //                | "(" expression ")" ;
 
+#[derive(Clone)]
 pub enum AstNode {
     Binary {
         left: Box<AstNode>,
@@ -25,6 +26,11 @@ pub enum AstNode {
     Unary {
         operator: char,
         operand: Box<AstNode>,
+    },
+    Print(Box<AstNode>),
+    Variable {
+        name: String,
+        value: Option<Box<AstNode>>,
     },
 }
 
@@ -43,14 +49,21 @@ impl Display for AstNode {
             }
             AstNode::String(s) => write!(f, "{}", s),
             AstNode::Unary { operator, operand } => write!(f, "({} {})", operator, operand),
+            AstNode::Print(v) => write!(f, "Print {}", v),
+            AstNode::Variable { name, value } => {
+                if let Some(value) = value {
+                    write!(f, "Variable {} = {}", name, value)
+                } else {
+                    write!(f, "Variable {} = None", name)
+                }
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::ast::AstNode;
-    use crate::token::Number;
+    use crate::{ast::AstNode, token::Number};
 
     #[test]
     fn display() {
