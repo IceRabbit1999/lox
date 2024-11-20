@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::bail;
 
 use crate::{
@@ -13,6 +15,10 @@ use crate::{
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
 
+// expression     → assignment ;
+// assignment     → IDENTIFIER "=" assignment
+//                | equality ;
+
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -24,38 +30,38 @@ use crate::{
 pub struct Parser {
     tokens: Vec<TokenType>,
     current: usize,
-    variables: Vec<AstNode>,
+    variables: HashMap<String, AstNode>,
 }
 impl Parser {
     fn find_var(
         &self,
         name: &str,
     ) -> Option<&AstNode> {
-        self.variables.iter().find(|node| {
-            if let AstNode::Variable { name: n, value: _ } = node {
-                n == name
-            } else {
-                false
-            }
-        })
+        self.variables.get(name)
     }
 
-    fn add_var(
+    fn has_var(
+        &self,
+        name: &str,
+    ) -> bool {
+        self.variables.contains_key(name)
+    }
+
+    fn insert_var(
         &mut self,
         var: AstNode,
     ) -> anyhow::Result<()> {
-        if let AstNode::Variable { name, value } = var {
-            match self.find_var(&name) {
-                Some(_) => {
-                    bail!("Variable {} already declared", name)
-                }
-                None => {
-                    self.variables.push(AstNode::Variable { name, value });
-                }
+        match var {
+            AstNode::Variable { name, value } => {
+                if let Some(old) = self.variables.insert(name.clone(), AstNode::Variable { name, value }) {
+                    println!("Variable {} got shadowed", old);
+                };
+                Ok(())
             }
-            return Ok(());
+            _ => {
+                bail!("Expected variable")
+            }
         }
-        bail!("Expected variable")
     }
 }
 
@@ -64,7 +70,7 @@ impl Parser {
         Self {
             tokens,
             current: 0,
-            variables: Vec::new(),
+            variables: HashMap::new(),
         }
     }
 
@@ -109,7 +115,7 @@ impl Parser {
                             name: name.to_string(),
                             value: None,
                         };
-                        self.add_var(var.clone())?;
+                        self.insert_var(var.clone())?;
                         if let Err(_e) = self.forward() {
                             println!("reach the end of the tokens, last token is {}", self.peek())
                         }
@@ -129,7 +135,7 @@ impl Parser {
                         name: name.to_string(),
                         value: Some(Box::new(expr)),
                     };
-                    self.add_var(var.clone())?;
+                    self.insert_var(var.clone())?;
                     Ok(var)
                 }
                 _ => {
@@ -150,7 +156,38 @@ impl Parser {
     }
 
     fn expression(&mut self) -> anyhow::Result<AstNode> {
-        self.equality()
+        self.assignment()
+    }
+
+    fn assignment(&mut self) -> anyhow::Result<AstNode> {
+        // assignment -> IDENTIFIER "=" assignment | equality ;
+        let token = self.peek().clone();
+        match token {
+            TokenType::Identifier(var_name) => {
+                if !self.has_var(&var_name) {
+                    return self.equality();
+                }
+                self.forward()?;
+                let token = self.peek();
+                match token {
+                    TokenType::Equal => {
+                        self.forward()?;
+                        let value = self.assignment()?;
+                        let var = AstNode::Variable {
+                            name: var_name.clone(),
+                            value: Some(Box::new(value.clone())),
+                        };
+                        self.insert_var(var.clone())?;
+
+                        todo!()
+                    }
+                    _ => {
+                        bail!("Expected '=' after variable")
+                    }
+                }
+            }
+            _ => self.equality(),
+        }
     }
 
     fn equality(&mut self) -> anyhow::Result<AstNode> {
