@@ -7,25 +7,26 @@ use crate::{
     token::{KeyWord, TokenType},
 };
 
-// program        → statement* EOF ;
-//
-// statement      → exprStmt
-//                | printStmt ;
-//
+// program        → declaration* EOF ;
+
+// declaration    → varDeclaration | statement ;
+
+// varDeclaration -> "var" IDENTIFIER ( "=" expression )? ";" ;
+
+// statement      -> exprStmt | printStmt;
+
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
 
 // expression     → assignment ;
-// assignment     → IDENTIFIER "=" assignment
-//                | equality ;
-
+// assignment     -> IDENTIFIER "=" assignment | equality ;
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 // term           → factor ( ( "-" | "+" ) factor )* ;
 // factor         → unary ( ( "/" | "*" ) unary )* ;
 // unary          → ( "!" | "-" ) unary | primary ;
-// primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" ;
+// primary        → NUMBER | STRING | "true" | "false" | "nil" | "(" expression ")" | IDENTIFIER ;
 
 pub struct Parser {
     tokens: Vec<TokenType>,
@@ -81,109 +82,123 @@ impl Parser {
     fn program(&mut self) -> anyhow::Result<Vec<AstNode>> {
         let mut vec = Vec::new();
         while self.current < self.tokens.len() - 1 {
-            let node = self.statement()?;
+            let node = self.declaration()?;
             vec.push(node);
         }
         Ok(vec)
     }
 
-    fn statement(&mut self) -> anyhow::Result<AstNode> {
+    fn declaration(&mut self) -> anyhow::Result<AstNode> {
+        // declaration    → varDeclaration | statement ;
         let token = self.peek();
         match token {
-            TokenType::KeyWord(keyword) => match keyword {
-                KeyWord::Print => {
+            TokenType::KeyWord(KeyWord::Var) => self.var_declaration(),
+            _ => self.statement(),
+        }
+    }
+
+    fn var_declaration(&mut self) -> anyhow::Result<AstNode> {
+        // varDeclaration -> "var" IDENTIFIER ( "=" expression )? ";" ;
+        self.forward()?;
+        let token = self.peek().clone();
+        let node = match token {
+            TokenType::Identifier(var_name) => {
+                self.forward()?;
+                if self.peek() == &TokenType::Equal {
                     self.forward()?;
-                    let expr = self.expression()?;
+                    let value = self.expression()?;
                     if self.peek() != &TokenType::Semicolon {
-                        bail!("Expected ';' after expression")
-                    }
-                    if let Err(_e) = self.forward() {
-                        println!("reach the end of the tokens, last token is {}", self.peek())
-                    }
-                    Ok(AstNode::Print(Box::new(expr)))
-                }
-                KeyWord::Var => {
-                    self.forward()?;
-                    let name = self.peek().clone();
-                    if let TokenType::Identifier(_) = name {
-                        self.forward()?;
-                    } else {
-                        bail!("Expected identifier after var")
-                    }
-                    if self.peek() == &TokenType::Semicolon {
-                        let var = AstNode::Variable {
-                            name: name.to_string(),
-                            value: None,
-                        };
-                        self.insert_var(var.clone())?;
-                        if let Err(_e) = self.forward() {
-                            println!("reach the end of the tokens, last token is {}", self.peek())
-                        }
-                        return Ok(var);
-                    }
-                    if self.peek() == &TokenType::Equal {
-                        self.forward()?;
-                    }
-                    let expr = self.expression()?;
-                    if self.peek() != &TokenType::Semicolon {
-                        bail!("Expected ';' after expression")
+                        bail!("Expected ';' after expression in var declaration")
                     }
                     if let Err(_e) = self.forward() {
                         println!("reach the end of the tokens, last token is {}", self.peek())
                     }
                     let var = AstNode::Variable {
-                        name: name.to_string(),
-                        value: Some(Box::new(expr)),
+                        name: var_name.clone(),
+                        value: Some(Box::new(value)),
                     };
                     self.insert_var(var.clone())?;
-                    Ok(var)
+                    var
+                } else {
+                    let var = AstNode::Variable {
+                        name: var_name.clone(),
+                        value: None,
+                    };
+                    self.insert_var(var.clone())?;
+                    if self.peek() != &TokenType::Semicolon {
+                        bail!("Expected ';' after var declaration")
+                    }
+                    if let Err(_e) = self.forward() {
+                        println!("reach the end of the tokens, last token is {}", self.peek())
+                    }
+                    var
                 }
-                _ => {
-                    bail!("Unexpected keyword {:?}", keyword)
-                }
-            },
-            _ => {
-                let expr = self.expression()?;
-                if self.peek() != &TokenType::Semicolon {
-                    bail!("Expected ';' after expression")
-                }
-                if let Err(_e) = self.forward() {
-                    println!("reach the end of the tokens, last token is {}", self.peek())
-                }
-                Ok(expr)
             }
+            _ => {
+                bail!("Expected identifier after var")
+            }
+        };
+
+        Ok(node)
+    }
+
+    fn statement(&mut self) -> anyhow::Result<AstNode> {
+        // statement      -> exprStmt | printStmt;
+        let token = self.peek();
+        match token {
+            TokenType::KeyWord(KeyWord::Print) => self.print_statement(),
+            _ => self.expression(),
         }
     }
 
+    fn print_statement(&mut self) -> anyhow::Result<AstNode> {
+        self.forward()?;
+        let expr = self.expression()?;
+        if self.peek() != &TokenType::Semicolon {
+            bail!("Expected ';' after expression in print statement")
+        }
+        if let Err(_e) = self.forward() {
+            println!("reach the end of the tokens, last token is {}", self.peek())
+        }
+        Ok(AstNode::Print(Box::new(expr)))
+    }
+
     fn expression(&mut self) -> anyhow::Result<AstNode> {
+        // expression     → assignment ;
         self.assignment()
     }
 
     fn assignment(&mut self) -> anyhow::Result<AstNode> {
-        // assignment -> IDENTIFIER "=" assignment | equality ;
+        // assignment     -> IDENTIFIER "=" assignment | equality ;
         let token = self.peek().clone();
         match token {
             TokenType::Identifier(var_name) => {
-                if !self.has_var(&var_name) {
-                    return self.equality();
-                }
-                self.forward()?;
-                let token = self.peek();
-                match token {
-                    TokenType::Equal => {
+                if self.has_var(&var_name) {
+                    if self.forward().is_err() {
+                        bail!("Unfinished assignment")
+                    }
+                    if self.peek() == &TokenType::Equal {
                         self.forward()?;
                         let value = self.assignment()?;
                         let var = AstNode::Variable {
                             name: var_name.clone(),
-                            value: Some(Box::new(value.clone())),
+                            value: Some(Box::new(value)),
                         };
                         self.insert_var(var.clone())?;
+                        if self.peek() != &TokenType::Semicolon {
+                            bail!("Expected ';' after assignment")
+                        }
+                        if self.next().is_some() {
+                            self.forward()?;
+                        }
 
-                        todo!()
+                        Ok(var)
+                    } else {
+                        let var = self.find_var(&var_name).unwrap().clone();
+                        Ok(var)
                     }
-                    _ => {
-                        bail!("Expected '=' after variable")
-                    }
+                } else {
+                    bail!("Variable {} not declared", var_name)
                 }
             }
             _ => self.equality(),
@@ -334,11 +349,10 @@ impl Parser {
                 }
             }
             _ => {
-                println!("{:?}", token);
-                println!("{:?}", self.current);
                 bail!("Expected expression in parsing primary")
             }
         };
+
         match self.forward() {
             Ok(_) => {}
             Err(_) => {
@@ -350,6 +364,13 @@ impl Parser {
 
     fn peek(&self) -> &TokenType {
         &self.tokens[self.current]
+    }
+
+    fn next(&self) -> Option<&TokenType> {
+        if self.current == self.tokens.len() - 1 {
+            return None;
+        }
+        Some(&self.tokens[self.current + 1])
     }
 
     fn forward(&mut self) -> anyhow::Result<()> {

@@ -1,3 +1,5 @@
 var foo;
-foo = "bar";
+var bar = 1;
+foo = bar == 1;
 print foo;
+foo = bar;
