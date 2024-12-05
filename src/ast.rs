@@ -1,7 +1,6 @@
 use std::fmt::{Display, Formatter};
 
-use crate::lexer::token::Number;
-
+use crate::token::Number;
 // expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
@@ -12,6 +11,7 @@ use crate::lexer::token::Number;
 // primary        → NUMBER | STRING | "true" | "false" | "nil"
 //                | "(" expression ")" ;
 
+#[derive(Clone)]
 pub enum AstNode {
     Binary {
         left: Box<AstNode>,
@@ -27,6 +27,12 @@ pub enum AstNode {
         operator: char,
         operand: Box<AstNode>,
     },
+    Print(Box<AstNode>),
+    Variable {
+        name: String,
+        value: Option<Box<AstNode>>,
+    },
+    Block(Vec<AstNode>),
 }
 
 impl Display for AstNode {
@@ -44,13 +50,28 @@ impl Display for AstNode {
             }
             AstNode::String(s) => write!(f, "{}", s),
             AstNode::Unary { operator, operand } => write!(f, "({} {})", operator, operand),
+            AstNode::Print(v) => write!(f, "Print {}", v),
+            AstNode::Variable { name, value } => {
+                if let Some(value) = value {
+                    write!(f, "Variable {} = {}", name, value)
+                } else {
+                    write!(f, "Variable {} = None", name)
+                }
+            }
+            AstNode::Block(v) => {
+                write!(f, "Block [")?;
+                for node in v {
+                    write!(f, "{}, ", node)?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{lexer::token::Number, parsing::ast::AstNode};
+    use crate::{ast::AstNode, token::Number};
 
     #[test]
     fn display() {
