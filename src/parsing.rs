@@ -13,14 +13,14 @@ use crate::{
 
 // varDeclaration -> "var" IDENTIFIER ( "=" expression )? ";" ;
 
-// statement      -> exprStmt | printStmt;
+// statement      -> exprStmt | printStmt | block ;
 
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
+// block          -> "{" declaration* "}" ;
 
 // expression     → assignment ;
 // assignment     -> IDENTIFIER "=" assignment | equality ;
-// expression     → equality ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 // term           → factor ( ( "-" | "+" ) factor )* ;
@@ -31,38 +31,76 @@ use crate::{
 pub struct Parser {
     tokens: Vec<TokenType>,
     current: usize,
-    variables: HashMap<String, AstNode>,
+    scope: Scope,
 }
-impl Parser {
-    fn find_var(
+
+#[derive(Clone)]
+pub struct Scope {
+    parent: Option<Box<Scope>>,
+    vars: HashMap<String, AstNode>,
+}
+
+impl Scope {
+    pub fn get_var(
         &self,
         name: &str,
     ) -> Option<&AstNode> {
-        self.variables.get(name)
+        let local = self.vars.get(name);
+        match local {
+            Some(var) => Some(var),
+            None => match &self.parent {
+                Some(parent) => parent.get_var(name),
+                None => None,
+            },
+        }
     }
 
-    fn has_var(
-        &self,
-        name: &str,
-    ) -> bool {
-        self.variables.contains_key(name)
-    }
-
-    fn insert_var(
+    pub fn add_var(
         &mut self,
         var: AstNode,
     ) -> anyhow::Result<()> {
-        match var {
-            AstNode::Variable { name, value } => {
-                if let Some(old) = self.variables.insert(name.clone(), AstNode::Variable { name, value }) {
-                    println!("Variable {} got shadowed", old);
-                };
-                Ok(())
-            }
-            _ => {
-                bail!("Expected variable")
-            }
+        if let AstNode::Variable { name, value } = var {
+            self.vars.insert(name.clone(), AstNode::Variable { name, value });
+            return Ok(());
         }
+        bail!("var: {} is not a AstNode::Variable", var)
+    }
+
+    pub fn expire(self) -> Self {
+        match self.parent {
+            Some(parent) => *parent,
+            None => self,
+        }
+    }
+
+    pub fn forward(self) -> Self {
+        let parent = Some(Box::new(self));
+        let vars = HashMap::new();
+        Self { parent, vars }
+    }
+}
+
+impl Parser {
+    fn get_var(
+        &self,
+        name: &str,
+    ) -> Option<&AstNode> {
+        self.scope.get_var(name)
+    }
+
+    fn add_var(
+        &mut self,
+        var: AstNode,
+    ) -> anyhow::Result<()> {
+        self.scope.add_var(var)
+    }
+
+    pub fn forward_scope(&mut self) {
+        self.scope = self.scope.clone().forward();
+    }
+
+    pub fn expire_scope(&mut self) {
+        self.scope = self.scope.clone().expire();
     }
 }
 
@@ -71,7 +109,10 @@ impl Parser {
         Self {
             tokens,
             current: 0,
-            variables: HashMap::new(),
+            scope: Scope {
+                parent: None,
+                vars: HashMap::new(),
+            },
         }
     }
 
@@ -117,14 +158,14 @@ impl Parser {
                         name: var_name.clone(),
                         value: Some(Box::new(value)),
                     };
-                    self.insert_var(var.clone())?;
+                    self.add_var(var.clone())?;
                     var
                 } else {
                     let var = AstNode::Variable {
                         name: var_name.clone(),
                         value: None,
                     };
-                    self.insert_var(var.clone())?;
+                    self.add_var(var.clone())?;
                     if self.peek() != &TokenType::Semicolon {
                         bail!("Expected ';' after var declaration")
                     }
@@ -143,10 +184,11 @@ impl Parser {
     }
 
     fn statement(&mut self) -> anyhow::Result<AstNode> {
-        // statement      -> exprStmt | printStmt;
+        // statement      -> exprStmt | printStmt | block;
         let token = self.peek();
         match token {
             TokenType::KeyWord(KeyWord::Print) => self.print_statement(),
+            TokenType::LeftBrace => self.block(),
             _ => self.expression(),
         }
     }
@@ -163,6 +205,25 @@ impl Parser {
         Ok(AstNode::Print(Box::new(expr)))
     }
 
+    fn block(&mut self) -> anyhow::Result<AstNode> {
+        // block          -> "{" declaration* "}" ;
+        self.forward()?;
+        self.forward_scope();
+        let mut vec = Vec::new();
+        while self.peek() != &TokenType::RightBrace {
+            let node = self.declaration()?;
+            vec.push(node);
+        }
+        self.expire_scope();
+        if self.peek() != &TokenType::RightBrace {
+            bail!("Expected '}}' after block")
+        }
+        if let Err(_e) = self.forward() {
+            println!("reach the end of the tokens, last token is {}", self.peek())
+        }
+        Ok(AstNode::Block(vec))
+    }
+
     fn expression(&mut self) -> anyhow::Result<AstNode> {
         // expression     → assignment ;
         self.assignment()
@@ -173,7 +234,8 @@ impl Parser {
         let token = self.peek().clone();
         match token {
             TokenType::Identifier(var_name) => {
-                if self.has_var(&var_name) {
+                let v = self.get_var(&var_name);
+                if v.is_some() {
                     if self.forward().is_err() {
                         bail!("Unfinished assignment")
                     }
@@ -184,7 +246,7 @@ impl Parser {
                             name: var_name.clone(),
                             value: Some(Box::new(value)),
                         };
-                        self.insert_var(var.clone())?;
+                        self.add_var(var.clone())?;
                         if self.peek() != &TokenType::Semicolon {
                             bail!("Expected ';' after assignment")
                         }
@@ -194,7 +256,7 @@ impl Parser {
 
                         Ok(var)
                     } else {
-                        let var = self.find_var(&var_name).unwrap().clone();
+                        let var = self.get_var(&var_name).unwrap().clone();
                         Ok(var)
                     }
                 } else {
@@ -342,7 +404,7 @@ impl Parser {
                 bail!("Unexpected ')' in parsing primary")
             }
             TokenType::Identifier(var_name) => {
-                if let Some(var) = self.find_var(&var_name) {
+                if let Some(var) = self.get_var(&var_name) {
                     var.clone()
                 } else {
                     bail!("Variable {} not declared", var_name)
@@ -411,6 +473,7 @@ mod tests {
 
         let mut parser = Parser::new(tokens);
         let node = parser.parse().unwrap();
+        println!("{}", node.len());
         for n in node {
             println!("{}", n);
             let result = n.evaluate();

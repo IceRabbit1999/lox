@@ -32,6 +32,7 @@ pub enum AstNode {
         name: String,
         value: Option<Box<AstNode>>,
     },
+    Block(Vec<AstNode>),
 }
 
 impl Display for AstNode {
@@ -56,6 +57,13 @@ impl Display for AstNode {
                 } else {
                     write!(f, "Variable {} = None", name)
                 }
+            }
+            AstNode::Block(v) => {
+                write!(f, "Block [")?;
+                for node in v {
+                    write!(f, "{}, ", node)?;
+                }
+                write!(f, "]")
             }
         }
     }

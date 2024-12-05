@@ -20,6 +20,14 @@ impl AstNode {
                     EvaluateResult::Nil
                 }
             }
+            // The result of Block is now the result of the last expression in the block.
+            Self::Block(nodes) => {
+                let mut result = EvaluateResult::Nil;
+                for node in nodes {
+                    result = node.evaluate();
+                }
+                result
+            }
         }
     }
 

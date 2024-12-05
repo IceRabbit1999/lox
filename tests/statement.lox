@@ -1,5 +1,6 @@
-var foo;
-var bar = 1;
-foo = bar == 1;
-print foo;
-foo = bar;
+var baz = (91 * 16) - 61;
+{
+    var world = "quz" + "89";
+    print world;
+}
+print baz;
