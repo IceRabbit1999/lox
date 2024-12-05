@@ -13,10 +13,11 @@ use crate::{
 
 // varDeclaration -> "var" IDENTIFIER ( "=" expression )? ";" ;
 
-// statement      -> exprStmt | printStmt | block ;
+// statement      -> exprStmt | printStmt | ifStmt | block ;
 
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
+// ifStmt         → "if" expression statement ( "else" statement )? ; // Not a fan of `()` after `if` so I personally removed it
 // block          -> "{" declaration* "}" ;
 
 // expression     → assignment ;
@@ -184,11 +185,12 @@ impl Parser {
     }
 
     fn statement(&mut self) -> anyhow::Result<AstNode> {
-        // statement      -> exprStmt | printStmt | block;
+        // statement      -> exprStmt | printStmt | ifStmt |block;
         let token = self.peek();
         match token {
             TokenType::KeyWord(KeyWord::Print) => self.print_statement(),
             TokenType::LeftBrace => self.block(),
+            TokenType::KeyWord(KeyWord::If) => self.if_statement(),
             _ => self.expression(),
         }
     }
@@ -222,6 +224,11 @@ impl Parser {
             println!("reach the end of the tokens, last token is {}", self.peek())
         }
         Ok(AstNode::Block(vec))
+    }
+    
+    fn if_statement(&mut self) -> anyhow::Result<AstNode> {
+        // ifStmt         -> "if" expression statement ( "else" statement )? ;
+        todo!()
     }
 
     fn expression(&mut self) -> anyhow::Result<AstNode> {
