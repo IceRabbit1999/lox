@@ -11,7 +11,7 @@ use crate::token::Number;
 // primary        → NUMBER | STRING | "true" | "false" | "nil"
 //                | "(" expression ")" ;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum AstNode {
     Binary {
         left: Box<AstNode>,
@@ -33,6 +33,10 @@ pub enum AstNode {
         value: Option<Box<AstNode>>,
     },
     Block(Vec<AstNode>),
+    If {
+        condition: Box<AstNode>,
+        exec_branch: Option<Box<AstNode>>,
+    },
 }
 
 impl Display for AstNode {
@@ -64,6 +68,9 @@ impl Display for AstNode {
                     write!(f, "{}, ", node)?;
                 }
                 write!(f, "]")
+            }
+            AstNode::If { condition, exec_branch } => {
+                write!(f, "If (condition: {}, exec_branch: {:?})", condition, exec_branch)
             }
         }
     }

@@ -4,9 +4,9 @@ use anyhow::bail;
 
 use crate::{
     ast::AstNode,
+    evaluating::EvaluateResult,
     token::{KeyWord, TokenType},
 };
-
 // program        → declaration* EOF ;
 
 // declaration    → varDeclaration | statement ;
@@ -17,8 +17,8 @@ use crate::{
 
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
-// ifStmt         → "if" expression statement ( "else" statement )? ; // Not a fan of `()` after `if` so I personally removed it
-// block          -> "{" declaration* "}" ;
+// ifStmt         → "if" expression statement ( "else" statement )? ; // Not a fan of `()` after
+// `if` so I personally removed it block          -> "{" declaration* "}" ;
 
 // expression     → assignment ;
 // assignment     -> IDENTIFIER "=" assignment | equality ;
@@ -43,13 +43,13 @@ pub struct Scope {
 
 impl Scope {
     pub fn get_var(
-        &self,
+        &mut self,
         name: &str,
-    ) -> Option<&AstNode> {
-        let local = self.vars.get(name);
+    ) -> Option<&mut AstNode> {
+        let local = self.vars.get_mut(name);
         match local {
             Some(var) => Some(var),
-            None => match &self.parent {
+            None => match &mut self.parent {
                 Some(parent) => parent.get_var(name),
                 None => None,
             },
@@ -60,11 +60,19 @@ impl Scope {
         &mut self,
         var: AstNode,
     ) -> anyhow::Result<()> {
-        if let AstNode::Variable { name, value } = var {
-            self.vars.insert(name.clone(), AstNode::Variable { name, value });
-            return Ok(());
+        match var {
+            AstNode::Variable { name, value } => {
+                let old_var = self.get_var(&name);
+                if old_var.is_some() {
+                    let old_var = old_var.unwrap();
+                    *old_var = AstNode::Variable { name, value };
+                } else {
+                    self.vars.insert(name.clone(), AstNode::Variable { name, value });
+                }
+                Ok(())
+            }
+            _ => bail!("var: {} is not a AstNode::Variable", var),
         }
-        bail!("var: {} is not a AstNode::Variable", var)
     }
 
     pub fn expire(self) -> Self {
@@ -83,9 +91,9 @@ impl Scope {
 
 impl Parser {
     fn get_var(
-        &self,
+        &mut self,
         name: &str,
-    ) -> Option<&AstNode> {
+    ) -> Option<&mut AstNode> {
         self.scope.get_var(name)
     }
 
@@ -225,10 +233,45 @@ impl Parser {
         }
         Ok(AstNode::Block(vec))
     }
-    
+
     fn if_statement(&mut self) -> anyhow::Result<AstNode> {
         // ifStmt         -> "if" expression statement ( "else" statement )? ;
-        todo!()
+        self.forward()?;
+        let condition = self.expression()?;
+        let then_branch = self.statement()?;
+        if condition.evaluate() == EvaluateResult::Boolean(true) {
+            if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
+                self.forward()?;
+            }
+
+            Ok(AstNode::If {
+                condition: Box::new(condition),
+                exec_branch: Some(Box::new(then_branch)),
+            })
+        } else {
+            let else_branch = if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
+                self.forward()?;
+                Some(Box::new(self.statement()?))
+            } else {
+                None
+            };
+            Ok(AstNode::If {
+                condition: Box::new(condition),
+                exec_branch: else_branch,
+            })
+        }
+
+        // let else_branch = if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
+        //     self.forward()?;
+        //     Some(Box::new(self.statement()?))
+        // } else {
+        //     None
+        // };
+        // Ok(AstNode::If {
+        //     condition: Box::new(condition),
+        //     then_branch: Box::new(then_branch),
+        //     else_branch,
+        // })
     }
 
     fn expression(&mut self) -> anyhow::Result<AstNode> {
@@ -262,6 +305,24 @@ impl Parser {
                         }
 
                         Ok(var)
+                    } else if self.peek() == &TokenType::Greater
+                        || self.peek() == &TokenType::GreaterEqual
+                        || self.peek() == &TokenType::Less
+                        || self.peek() == &TokenType::LessEqual
+                        || self.peek() == &TokenType::BangEqual
+                        || self.peek() == &TokenType::EqualEqual
+                    {
+                        println!("peek: {:?}", self.peek());
+                        let var = self.get_var(&var_name).unwrap().clone();
+                        let operator = self.peek().to_string();
+                        self.forward()?;
+                        let binary = AstNode::Binary {
+                            left: Box::new(var),
+                            operator,
+                            right: Box::new(self.equality()?),
+                        };
+
+                        Ok(binary)
                     } else {
                         let var = self.get_var(&var_name).unwrap().clone();
                         Ok(var)
@@ -418,7 +479,7 @@ impl Parser {
                 }
             }
             _ => {
-                bail!("Expected expression in parsing primary")
+                bail!("Expected expression in parsing primary but found {:?}", token)
             }
         };
 
@@ -480,6 +541,29 @@ mod tests {
 
         let mut parser = Parser::new(tokens);
         let node = parser.parse().unwrap();
+        println!("{}", node.len());
+        for n in node {
+            println!("{}", n);
+            let result = n.evaluate();
+            println!("{:?}", result);
+        }
+    }
+
+    #[test]
+    fn if_stmt() {
+        let path = "tests/if.lox";
+        let tokens = lexing(path).unwrap();
+        let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
+
+        println!("{:?}", tokens);
+
+        let mut parser = Parser::new(tokens);
+
+        let node = parser.parse().unwrap();
+
+        let option = parser.get_var("foo");
+        println!("foo: {:?}", option);
+
         println!("{}", node.len());
         for n in node {
             println!("{}", n);

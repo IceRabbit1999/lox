@@ -28,6 +28,10 @@ impl AstNode {
                 }
                 result
             }
+            Self::If { condition: _, exec_branch } => match exec_branch {
+                Some(node) => node.evaluate(),
+                None => EvaluateResult::Nil,
+            },
         }
     }
 
@@ -83,7 +87,7 @@ impl AstNode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EvaluateResult {
     Boolean(bool),
     Number(Number),

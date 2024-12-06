@@ -5,3 +5,6 @@ print b;
 var foo;
 var bar = 1;
 foo = bar == 1;
+
+var foo = 1;
+var bar = foo + 1;
