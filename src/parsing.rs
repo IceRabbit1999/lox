@@ -160,9 +160,7 @@ impl Parser {
                     if self.peek() != &TokenType::Semicolon {
                         bail!("Expected ';' after expression in var declaration")
                     }
-                    if let Err(_e) = self.forward() {
-                        println!("reach the end of the tokens, last token is {}", self.peek())
-                    }
+                    let _ = self.forward();
                     let var = AstNode::Variable {
                         name: var_name.clone(),
                         value: Some(Box::new(value)),
@@ -178,9 +176,7 @@ impl Parser {
                     if self.peek() != &TokenType::Semicolon {
                         bail!("Expected ';' after var declaration")
                     }
-                    if let Err(_e) = self.forward() {
-                        println!("reach the end of the tokens, last token is {}", self.peek())
-                    }
+                    let _ = self.forward();
                     var
                 }
             }
@@ -209,9 +205,7 @@ impl Parser {
         if self.peek() != &TokenType::Semicolon {
             bail!("Expected ';' after expression in print statement")
         }
-        if let Err(_e) = self.forward() {
-            println!("reach the end of the tokens, last token is {}", self.peek())
-        }
+        let _ = self.forward();
         Ok(AstNode::Print(Box::new(expr)))
     }
 
@@ -238,40 +232,40 @@ impl Parser {
         // ifStmt         -> "if" expression statement ( "else" statement )? ;
         self.forward()?;
         let condition = self.expression()?;
-        let then_branch = self.statement()?;
+        let exec_branch;
+
         if condition.evaluate() == EvaluateResult::Boolean(true) {
+            exec_branch = Some(Box::new(self.statement()?));
+
+            if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
+                // assume the else branch is end of by `}`
+                while self.peek() != &TokenType::RightBrace {
+                    self.forward()?;
+                }
+                self.forward()?;
+            }
+            Ok(AstNode::If {
+                condition: Box::new(condition),
+                exec_branch,
+            })
+        } else {
+            // skip then branch
+            while self.peek() != &TokenType::RightBrace {
+                self.forward()?;
+            }
+            self.forward()?;
             if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
                 self.forward()?;
+                exec_branch = Some(Box::new(self.statement()?));
+            } else {
+                exec_branch = None
             }
 
             Ok(AstNode::If {
                 condition: Box::new(condition),
-                exec_branch: Some(Box::new(then_branch)),
-            })
-        } else {
-            let else_branch = if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
-                self.forward()?;
-                Some(Box::new(self.statement()?))
-            } else {
-                None
-            };
-            Ok(AstNode::If {
-                condition: Box::new(condition),
-                exec_branch: else_branch,
+                exec_branch,
             })
         }
-
-        // let else_branch = if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
-        //     self.forward()?;
-        //     Some(Box::new(self.statement()?))
-        // } else {
-        //     None
-        // };
-        // Ok(AstNode::If {
-        //     condition: Box::new(condition),
-        //     then_branch: Box::new(then_branch),
-        //     else_branch,
-        // })
     }
 
     fn expression(&mut self) -> anyhow::Result<AstNode> {
@@ -555,20 +549,13 @@ mod tests {
         let tokens = lexing(path).unwrap();
         let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
 
-        println!("{:?}", tokens);
-
         let mut parser = Parser::new(tokens);
 
         let node = parser.parse().unwrap();
 
-        let option = parser.get_var("foo");
-        println!("foo: {:?}", option);
-
-        println!("{}", node.len());
         for n in node {
-            println!("{}", n);
-            let result = n.evaluate();
-            println!("{:?}", result);
+            let res = n.evaluate();
+            println!("{} -> {:?}", n, res);
         }
     }
 }
