@@ -37,6 +37,14 @@ pub enum AstNode {
         condition: Box<AstNode>,
         exec_branch: Option<Box<AstNode>>,
     },
+    Or {
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+    },
+    And {
+        left: Box<AstNode>,
+        right: Box<AstNode>,
+    },
 }
 
 impl Display for AstNode {
@@ -72,6 +80,8 @@ impl Display for AstNode {
             AstNode::If { condition, exec_branch } => {
                 write!(f, "If (condition: {}, exec_branch: {:?})", condition, exec_branch)
             }
+            AstNode::Or { left, right } => write!(f, "Or (left: {}, right: {})", left, right),
+            AstNode::And { left, right } => write!(f, "And (left: {}, right: {})", left, right),
         }
     }
 }

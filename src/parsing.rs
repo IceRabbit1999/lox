@@ -17,11 +17,13 @@ use crate::{
 
 // exprStmt       → expression ";" ;
 // printStmt      → "print" expression ";" ;
-// ifStmt         → "if" expression statement ( "else" statement )? ; // Not a fan of `()` after
-// `if` so I personally removed it block          -> "{" declaration* "}" ;
+// ifStmt         → "if" expression statement ( "else" statement )? ; (Not a fan of `()` after`if`
+// so I personally removed it) block          -> "{" declaration* "}" ;
 
 // expression     → assignment ;
-// assignment     -> IDENTIFIER "=" assignment | equality ;
+// assignment     -> IDENTIFIER "=" assignment | logic_or ;
+// logic_or       -> logic_and ( "or" logic_and )* ;
+// logic_and      -> equality ( "and" equality )* ;
 // equality       → comparison ( ( "!=" | "==" ) comparison )* ;
 // comparison     → term ( ( ">" | ">=" | "<" | "<=" ) term )* ;
 // term           → factor ( ( "-" | "+" ) factor )* ;
@@ -222,9 +224,7 @@ impl Parser {
         if self.peek() != &TokenType::RightBrace {
             bail!("Expected '}}' after block")
         }
-        if let Err(_e) = self.forward() {
-            println!("reach the end of the tokens, last token is {}", self.peek())
-        }
+        let _ = self.forward();
         Ok(AstNode::Block(vec))
     }
 
@@ -234,15 +234,16 @@ impl Parser {
         let condition = self.expression()?;
         let exec_branch;
 
+        println!("condition: {} -> {:?}", condition, condition.evaluate());
         if condition.evaluate() == EvaluateResult::Boolean(true) {
             exec_branch = Some(Box::new(self.statement()?));
-
+            println!("exec_branch: {:?}", exec_branch);
             if self.peek() == &TokenType::KeyWord(KeyWord::Else) {
                 // assume the else branch is end of by `}`
                 while self.peek() != &TokenType::RightBrace {
                     self.forward()?;
                 }
-                self.forward()?;
+                let _ = self.forward();
             }
             Ok(AstNode::If {
                 condition: Box::new(condition),
@@ -274,16 +275,14 @@ impl Parser {
     }
 
     fn assignment(&mut self) -> anyhow::Result<AstNode> {
-        // assignment     -> IDENTIFIER "=" assignment | equality ;
+        // assignment     -> IDENTIFIER "=" assignment | logic_or ;
         let token = self.peek().clone();
         match token {
             TokenType::Identifier(var_name) => {
                 let v = self.get_var(&var_name);
                 if v.is_some() {
-                    if self.forward().is_err() {
-                        bail!("Unfinished assignment")
-                    }
-                    if self.peek() == &TokenType::Equal {
+                    if self.next().unwrap() == &TokenType::Equal {
+                        self.forward()?;
                         self.forward()?;
                         let value = self.assignment()?;
                         let var = AstNode::Variable {
@@ -299,34 +298,44 @@ impl Parser {
                         }
 
                         Ok(var)
-                    } else if self.peek() == &TokenType::Greater
-                        || self.peek() == &TokenType::GreaterEqual
-                        || self.peek() == &TokenType::Less
-                        || self.peek() == &TokenType::LessEqual
-                        || self.peek() == &TokenType::BangEqual
-                        || self.peek() == &TokenType::EqualEqual
-                    {
-                        println!("peek: {:?}", self.peek());
-                        let var = self.get_var(&var_name).unwrap().clone();
-                        let operator = self.peek().to_string();
-                        self.forward()?;
-                        let binary = AstNode::Binary {
-                            left: Box::new(var),
-                            operator,
-                            right: Box::new(self.equality()?),
-                        };
-
-                        Ok(binary)
-                    } else {
-                        let var = self.get_var(&var_name).unwrap().clone();
-                        Ok(var)
+                    }
+                    else {
+                        self.logic_or()
                     }
                 } else {
                     bail!("Variable {} not declared", var_name)
                 }
             }
-            _ => self.equality(),
+            _ => self.logic_or(),
         }
+    }
+
+    fn logic_or(&mut self) -> anyhow::Result<AstNode> {
+        // logic_or       -> logic_and ( "or" logic_and )* ;
+        let mut left = self.logic_and()?;
+        while self.peek() == &TokenType::KeyWord(KeyWord::Or) {
+            self.forward()?;
+            let right = self.logic_and()?;
+            left = AstNode::Or {
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
+    }
+
+    fn logic_and(&mut self) -> anyhow::Result<AstNode> {
+        // logic_and      -> equality ( "and" equality )* ;
+        let mut left = self.equality()?;
+        while self.peek() == &TokenType::KeyWord(KeyWord::And) {
+            self.forward()?;
+            let right = self.equality()?;
+            left = AstNode::And {
+                left: Box::new(left),
+                right: Box::new(right),
+            };
+        }
+        Ok(left)
     }
 
     fn equality(&mut self) -> anyhow::Result<AstNode> {
@@ -357,20 +366,21 @@ impl Parser {
 
         let mut node = self.term()?;
 
-        loop {
-            let token = self.peek();
-            if token == &TokenType::Greater || token == &TokenType::GreaterEqual || token == &TokenType::Less || token == &TokenType::LessEqual {
-                let operator = token.to_string();
-                self.forward()?;
-                let right = self.term()?;
-                node = AstNode::Binary {
-                    left: Box::new(node),
-                    operator,
-                    right: Box::new(right),
-                };
-            } else {
-                break;
-            }
+        while self.peek() == &TokenType::Greater
+            || self.peek() == &TokenType::GreaterEqual
+            || self.peek() == &TokenType::Less
+            || self.peek() == &TokenType::LessEqual
+            || self.peek() == &TokenType::BangEqual
+            || self.peek() == &TokenType::EqualEqual
+        {
+            let operator = self.peek().to_string();
+            self.forward()?;
+            let right = self.term()?;
+            node = AstNode::Binary {
+                left: Box::new(node),
+                operator,
+                right: Box::new(right),
+            };
         }
 
         Ok(node)
@@ -549,6 +559,21 @@ mod tests {
         let tokens = lexing(path).unwrap();
         let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
 
+        let mut parser = Parser::new(tokens);
+
+        let node = parser.parse().unwrap();
+
+        for n in node {
+            let res = n.evaluate();
+            println!("{} -> {:?}", n, res);
+        }
+    }
+
+    #[test]
+    fn logic() {
+        let path = "tests/logic.lox";
+        let tokens = lexing(path).unwrap();
+        let tokens = tokens.into_iter().filter(|token| !token.is_skippable()).collect::<Vec<TokenType>>();
         let mut parser = Parser::new(tokens);
 
         let node = parser.parse().unwrap();

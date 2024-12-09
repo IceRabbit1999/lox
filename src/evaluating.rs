@@ -32,6 +32,34 @@ impl AstNode {
                 Some(node) => node.evaluate(),
                 None => EvaluateResult::Nil,
             },
+            Self::Or { left, right } => {
+                let left = left.evaluate();
+                if let EvaluateResult::Boolean(v) = left {
+                    if v {
+                        return EvaluateResult::Boolean(true);
+                    }
+                }
+                let right = right.evaluate();
+                if let EvaluateResult::Boolean(v) = right {
+                    EvaluateResult::Boolean(v)
+                } else {
+                    panic!("Invalid right operand");
+                }
+            }
+            Self::And { left, right } => {
+                let left = left.evaluate();
+                if let EvaluateResult::Boolean(v) = left {
+                    if !v {
+                        return EvaluateResult::Boolean(false);
+                    }
+                }
+                let right = right.evaluate();
+                if let EvaluateResult::Boolean(v) = right {
+                    EvaluateResult::Boolean(v)
+                } else {
+                    panic!("Invalid right operand");
+                }
+            }
         }
     }
 
